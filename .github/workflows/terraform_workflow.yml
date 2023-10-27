@@ -1,0 +1,66 @@
+# This GitHub Action deploys AWS infrastructure changes using Terraform whenever there are modifications to Terraform files.
+# It supports manual triggering for different environments (like dev, staging, prod) and automates the entire process from 
+# fetching secrets using Doppler, initializing Terraform, to applying Terraform changes.
+
+name: CICD Deployment
+
+on:
+  # Automatic trigger on pushes to the main branch that affect Terraform files.
+  push:
+    branches:
+      - main  
+    paths:
+      - 'terraform/**.tf'
+
+  # Manual trigger to deploy to specific environments like 'dev', 'staging', or 'prod'.
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+
+jobs:
+  deploy:
+    name: Deploy AWS Infrastructure
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install Doppler CLI
+      run: curl -Ls https://cli.doppler.com/install.sh | sh
+
+    - name: Set Doppler Environment and Fetch secrets
+      id: doppler_setup
+      run: |
+        export DOPPLER_ENVIRONMENT=${{ github.event.inputs.environment }}
+        eval $(doppler secrets download --project aws-infrastructure --config $DOPPLER_ENVIRONMENT --format env)
+      env:
+        DOPPLER_TOKEN: ${{ secrets.DOPPLER_CI_TOKEN }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
+
+    - name: Terraform Plan
+      run: |
+        cd terraform
+        terraform plan -var-file=environments/${{ github.event.inputs.environment }}.tfvars
+
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve -var-file=environments/${{ github.event.inputs.environment }}.tfvars
+
+    # Additional: Clear any sensitive environment variables after run
+    - name: Clear Environment Variables
+      run: |
+        unset AWS_ACCESS_KEY
+        unset AWS_SECRET_KEY

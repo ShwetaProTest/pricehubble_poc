@@ -1,7 +1,7 @@
 import pandas as pd 
 import re
 
-cleaned_data = pd.read_json("data/Processed/processed_sample.json")
+cleaned_data = pd.read_json("data/Processed/cleaned_sample.json")
 
 ppm = cleaned_data['price'] / cleaned_data['living_area']
 if ppm.between(500, 15000).all():
